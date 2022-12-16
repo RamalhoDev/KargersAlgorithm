@@ -1,11 +1,10 @@
 from KagerStructures import SuperNode
 import random
+from tqdm import tqdm
+import pandas as pd
+import plotly.express as px
+import sys
 
-instance = "in/graph_type2_3"
-
-lines = ''
-with open(instance) as f:
-  lines = f.readlines()
 
 
 def parse_graph(lines):
@@ -31,7 +30,6 @@ def parse_graph(lines):
   vertices = [i for i in range(1, n_vertices + 1)]
 
   return {'vertices': vertices, 'edges': edges}
-
 
 def find_vertex(id, supernodes: list):
   for supernode in supernodes:
@@ -66,7 +64,6 @@ def get_cut(supernodes, edges):
         cut = cut + 1
   return cut
 
-
 def karger(graph):
   supernodes = [SuperNode([i]) for i in graph['vertices']]
   superedges = dict()
@@ -97,26 +94,82 @@ def karger(graph):
     supernodes.remove(find_vertex(destination, supernodes))
     supernodes.append(_x)
 
-  supernodes[0].nodes.sort()
-  supernodes[1].nodes.sort()
-  # print(supernodes[0].nodes, supernodes[1].nodes, get_cut(supernodes, graph["edges"]))
+
+  return get_cut(supernodes, graph["edges"])
 
 
 def naive_algorithm(graph):
   v = graph['vertices']
   edges = graph['edges']
-  s = set(random.choices(v, k=random.randrange(0, len(v)-1)))
+  s = set(random.choices(v, k=random.randrange(1, len(v)-1)))
   v = set(v)
   s_bar = v - s
   cut = 0
-  for i in range(len(s)):
-    for j in range(len(s_bar)):
-      if (i, j) in edges:
+
+  for i in s:
+    for j in s_bar:
+      if (i, j) in edges or (j,i) in edges:
         cut = cut + 1
-  print(cut)
+
+  return cut
+
+def run_iter(func, graph, iter):
+    best = -1
+    for i in range(iter):
+        res = func(graph)
+        if best == -1 or res < best:
+            best = res
+    return best
 
 
-graph = parse_graph(lines)
-karger(graph)
-naive_algorithm(graph)
-# print(graph)
+def main():
+  instance = sys.argv[1]
+  result = sys.argv[2]
+  
+  best_cut = 0
+  with open(result) as f:
+      best_cut = int(f.readline())
+  print(best_cut)
+  lines = ''
+  with open(instance) as f:
+    lines = f.readlines()
+  
+  graph = parse_graph(lines)
+  
+  count_best_karger = 0
+  count_best_naive = 0
+  
+  percentage_karger = 0
+  percentage_naive = 0
+  iterations = 1
+  
+  data = {"percentages": [], "type":[], "iterations":[]}
+  n_exec = 10000
+  while(percentage_karger < 0.99):
+      for i in tqdm(range(n_exec), desc= "Progresso"):
+          best_karger = run_iter(karger, graph, iterations)
+          best_naive = run_iter(naive_algorithm, graph, iterations)
+  
+          if best_karger == best_cut:
+              count_best_karger = count_best_karger + 1
+          if best_naive == best_cut:
+              count_best_naive = count_best_naive + 1
+  
+      percentage_karger = count_best_karger/n_exec
+      percentage_naive = count_best_naive/n_exec
+      data["percentages"].append(percentage_karger)
+      data["type"].append("karger")
+      data["percentages"].append(percentage_naive)
+      data["type"].append("naive")
+      data["iterations"].append(iterations)
+      data["iterations"].append(iterations)
+      count_best_karger = 0
+      count_best_naive = 0
+      iterations = iterations * 2
+  
+  df = pd.DataFrame(data)
+  fig = px.line(df, x="iterations", y="percentages", color="type", title='Análise Empírica Naive x Kargers', markers=True)
+  fig.show()
+
+if __name__=="__main__":
+  main()
